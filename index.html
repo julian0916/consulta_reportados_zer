@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Consulta de Reporte de Vehículos</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+  <div class="input-container">
+    <input type="text" id="placaInput" placeholder="Placa" maxlength="6" />
+  </div>
+  <button id="consultButton">Consultar</button>
+
+  <div id="resultModal" class="modal">
+    <div class="modal-content">
+      <span class="close">&times;</span>
+      <p id="result"></p>
+      <table id="detailsTable">
+        <thead>
+          <tr>
+            <th>Valor Cobrado</th>
+            <th>Nombre de zona</th>
+            <th>Fecha y hora de ingreso</th>
+            <th>Fecha y hora de salida</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Las filas de la tabla se agregarán aquí dinámicamente -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <script src="zonas.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const resultModal = document.getElementById('resultModal');
+      const span = document.getElementsByClassName('close')[0];
+
+      span.onclick = function () {
+        resultModal.style.display = 'none';
+      };
+
+      window.onclick = function (event) {
+        if (event.target == resultModal) {
+          resultModal.style.display = 'none';
+        }
+      };
+
+      document.getElementById('placaInput').addEventListener('keypress', function (event) {
+        if (event.key === 'Enter') {
+          document.getElementById('consultButton').click();
+        }
+      });
+    });
+
+    document.getElementById('consultButton').addEventListener('click', async () => {
+      const input = document.getElementById('placaInput');
+      const resultDiv = document.getElementById('result');
+      const resultModal = document.getElementById('resultModal');
+      const detailsTable = document.getElementById('detailsTable').getElementsByTagName('tbody')[0];
+      const table = document.getElementById('detailsTable');
+
+      resultDiv.innerHTML = 'Consultando...';
+
+      const placa = input.value.toUpperCase();
+      if (!placa) {
+        resultDiv.textContent = 'Por favor ingrese una placa.';
+        resultModal.style.display = 'block';
+        table.style.display = 'none';
+        return;
+      }
+
+      const today = new Date().toISOString().split('T')[0].replace(/-/g, '');
+
+      try {
+        const response = await fetch(
+          `https://sistemaszer365.com:8443/zer-api-reportes//v1/reportes/reporte_vehiculo/210504082820861533/20170101/${today}/${placa}?limite=10000000&actual=1`
+        );
+        const data = await response.json();
+
+        const reportados = data.reporte.filter(
+          (record) => record.nombre_estado === "Reportada"
+        );
+
+        if (reportados.length === 0) {
+          resultDiv.textContent = 'No tiene saldo pendiente de cobro, gracias por apoyar los programas sociales del municipio de Rionegro.';
+          table.style.display = 'none';
+        } else {
+          let saldoTotal = 0;
+          detailsTable.innerHTML = '';
+          table.style.display = '';
+
+          reportados.forEach((record) => {
+            const valorCobrado = record.valor_cobrado;
+            const nombreZona = zonaNombres[record.nombre_zona] || record.nombre_zona;
+            const hEntrada = record.fh_ingreso ? formatFecha(record.fh_ingreso) : 'N/A';
+            const hSalida = record.fh_egreso ? formatFecha(record.fh_egreso) : 'N/A';
+
+            saldoTotal += valorCobrado;
+
+            const row = detailsTable.insertRow();
+            const cellValor = row.insertCell(0);
+            const cellZona = row.insertCell(1);
+            const cellEntrada = row.insertCell(2);
+            const cellSalida = row.insertCell(3);
+
+            cellValor.textContent = formatearPesosColombianos(valorCobrado);
+            cellZona.textContent = nombreZona;
+            cellEntrada.textContent = hEntrada;
+            cellSalida.textContent = hSalida;
+          });
+          resultDiv.innerHTML = `El vehículo de placas <strong>${placa}</strong> tiene un saldo pendiente de <strong>${formatearPesosColombianos(saldoTotal)}</strong>, Recuerda que con tu pago aportas a los programas sociales del municipio de Rionegro.<br>Para más información te puedes comunicar a la línea <strong>+57 3102211374.</strong>`;
+        }
+      } catch (error) {
+        resultDiv.textContent = 'Error en la consulta';
+        console.error('Error:', error);
+        detailsTable.innerHTML = '';
+        table.style.display = 'none';
+      }
+      resultModal.style.display = 'block';
+    });
+  </script>
+</body>
+
+</html>
